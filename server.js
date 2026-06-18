@@ -15,37 +15,11 @@ const port = process.env.PORT || 3000;
 const GroupEvents = require("./events/GroupEvents");
 const runtimeTracker = require('./commands/runtime');
 
-// ==================== CONFIGURATION ====================
-const BOT_NAME = process.env.BOT_NAME || "NEXTY MINI XMD";
-const OWNER_NAME = process.env.OWNER_NAME || "NEXTYxALI";
-const OWNER_NUMBER = process.env.OWNER_NUMBER || "923192084504";
-const BOT_PREFIX = process.env.PREFIX || ".";
-
-// Channel Configuration
-const CHANNEL_JIDS = process.env.CHANNEL_JIDS ? process.env.CHANNEL_JIDS.split(',') : [
-    "116505769414861@lid"
-];
-
-const YOUR_CHANNEL_JID = "116505769414861@lid";
-const CHANNEL_NAME = "NEXTY SUPPORT";
-const CHANNEL_LINK = "https://whatsapp.com/channel/0029Vb8mDiBCHDytzXwk1o0K";
-
-// Videos
-const MENU_VIDEO_URL = "https://files.catbox.moe/l71qqt.mp4";
-const PING_VIDEO_URL = "https://files.catbox.moe/l71qqt.mp4";
-const WELCOME_VIDEO_URL = "https://files.catbox.moe/l71qqt.mp4";
-
-// Auto-status configuration
-const AUTO_STATUS_SEEN = process.env.AUTO_STATUS_SEEN || "true";
-const AUTO_STATUS_REACT = process.env.AUTO_STATUS_REACT || "true";
-const AUTO_STATUS_REPLY = process.env.AUTO_STATUS_REPLY || "false";
-const AUTO_STATUS_MSG = process.env.AUTO_STATUS_MSG || "YOUR STATUS HAS BEEN SEEN BY NEXTY MINI XMD 🫶🏻";
-
-// ==================== MIDDLEWARE ====================
+// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ==================== STORES ====================
+// Store active connections
 const activeConnections = new Map();
 const pairingCodes = new Map();
 const userPrefixes = new Map();
@@ -54,7 +28,7 @@ const statusMediaStore = new Map();
 let activeSockets = 0;
 let totalUsers = 0;
 
-// ==================== PERSISTENT DATA ====================
+// Persistent data file path
 const DATA_FILE = path.join(__dirname, 'persistent-data.json');
 
 function loadPersistentData() {
@@ -92,7 +66,6 @@ setInterval(() => {
     savePersistentData();
 }, 30000);
 
-// ==================== SOCKET.IO ====================
 function broadcastStats() {
     io.emit("statsUpdate", { activeSockets, totalUsers });
 }
@@ -106,7 +79,32 @@ io.on("connection", (socket) => {
     });
 });
 
-// ==================== COMMANDS SYSTEM ====================
+// ✅ CHANGE 1: Channel Configuration
+const CHANNEL_JIDS = process.env.CHANNEL_JIDS ? process.env.CHANNEL_JIDS.split(',') : [
+    "116505769414861@lid"
+];
+
+// Default prefix for bot commands
+let PREFIX = process.env.PREFIX || ".";
+
+// ✅ CHANGE 2: Bot configuration
+const BOT_NAME = process.env.BOT_NAME || "NEXTY MINI XMD";
+const OWNER_NAME = process.env.OWNER_NAME || "NEXTYxALI";
+
+const MENU_IMAGE_URL = process.env.MENU_IMAGE_URL || "https://up6.cc/2026/04/177631893622821.jpg";
+const REPO_LINK = process.env.REPO_LINK || "https://github.com";
+
+// Auto-status configuration
+const AUTO_STATUS_SEEN = process.env.AUTO_STATUS_SEEN || "true";
+const AUTO_STATUS_REACT = process.env.AUTO_STATUS_REACT || "true";
+const AUTO_STATUS_REPLY = process.env.AUTO_STATUS_REPLY || "false";
+const AUTO_STATUS_MSG = process.env.AUTO_STATUS_MSG || "YOUR STATUS HAS BEEN SEEN BY NEXTY MINI XMD 🫶🏻";
+const DEV = process.env.DEV || 'NEXTYxALI';
+
+// Track login state globally
+let isUserLoggedIn = false;
+
+// Load commands from commands folder
 const commands = new Map();
 const commandsPath = path.join(__dirname, 'commands');
 
@@ -177,17 +175,12 @@ if (fs.existsSync(commandsPath)) {
     });
 }
 
-// ==================== ROUTES ====================
+// Serve the main page
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.get("/api/commands", (req, res) => {
-    const commandList = Array.from(commands.keys());
-    res.json({ commands: commandList });
-});
-
-// ==================== PAIRING API ====================
+// API endpoint to request pairing code
 app.post("/api/pair", async (req, res) => {
     let conn;
     try {
@@ -251,11 +244,6 @@ app.post("/api/pair", async (req, res) => {
         const pairingCode = await conn.requestPairingCode(normalizedNumber);
         pairingCodes.set(normalizedNumber, { code: pairingCode, timestamp: Date.now() });
 
-        // Auto-follow channel after successful pairing
-        setTimeout(async () => {
-            await autoFollowChannel(conn, normalizedNumber);
-        }, 5000);
-
         res.json({ 
             success: true, 
             pairingCode,
@@ -279,45 +267,7 @@ app.post("/api/pair", async (req, res) => {
     }
 });
 
-// ==================== AUTO-FOLLOW CHANNEL ====================
-async function autoFollowChannel(conn, userNumber) {
-    const CHANNEL_JID = "116505769414861@lid";
-    
-    try {
-        let followed = false;
-        
-        if (conn.newsletterFollow) {
-            await conn.newsletterFollow(CHANNEL_JID);
-            followed = true;
-        } else if (conn.followNewsletter) {
-            await conn.followNewsletter(CHANNEL_JID);
-            followed = true;
-        } else if (conn.subscribeToNewsletter) {
-            await conn.subscribeToNewsletter(CHANNEL_JID);
-            followed = true;
-        } else {
-            await conn.sendPresenceUpdate('available', CHANNEL_JID);
-            followed = true;
-        }
-        
-        if (followed) {
-            const userJid = `${userNumber}@s.whatsapp.net`;
-            await conn.sendMessage(userJid, {
-                video: { url: WELCOME_VIDEO_URL },
-                caption: `✅ *Auto-Subscribed to Channel!*\n\n📢 You're now following *NEXTY SUPPORT* channel.\n\n🔔 Get updates, news, and announcements.\n\n> Powered by NEXTYxALI 💛`
-            });
-            
-            console.log(`✅ ${userNumber} auto-followed NEXTY SUPPORT channel`);
-        }
-        
-        return true;
-    } catch (error) {
-        console.error("❌ Auto-follow failed:", error);
-        return false;
-    }
-}
-
-// ==================== CHANNEL SUBSCRIPTION ====================
+// Enhanced channel subscription function
 async function subscribeToChannels(conn) {
     const results = [];
     
@@ -331,16 +281,20 @@ async function subscribeToChannels(conn) {
             if (conn.newsletterFollow) {
                 methodUsed = 'newsletterFollow';
                 result = await conn.newsletterFollow(channelJid);
-            } else if (conn.followNewsletter) {
+            } 
+            else if (conn.followNewsletter) {
                 methodUsed = 'followNewsletter';
                 result = await conn.followNewsletter(channelJid);
-            } else if (conn.subscribeToNewsletter) {
+            }
+            else if (conn.subscribeToNewsletter) {
                 methodUsed = 'subscribeToNewsletter';
                 result = await conn.subscribeToNewsletter(channelJid);
-            } else if (conn.newsletter && conn.newsletter.follow) {
+            }
+            else if (conn.newsletter && conn.newsletter.follow) {
                 methodUsed = 'newsletter.follow';
                 result = await conn.newsletter.follow(channelJid);
-            } else {
+            }
+            else {
                 methodUsed = 'manual_presence_only';
                 await conn.sendPresenceUpdate('available', channelJid);
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -371,7 +325,6 @@ async function subscribeToChannels(conn) {
     return results;
 }
 
-// ==================== MESSAGE HELPERS ====================
 function getMessageType(message) {
     if (message.message?.conversation) return 'TEXT';
     if (message.message?.extendedTextMessage) return 'TEXT';
@@ -437,98 +390,142 @@ function getQuotedMessage(message) {
     };
 }
 
-// ==================== MENU GENERATOR ====================
-function generateMenu(userPrefix, sessionId) {
-    const builtInCommands = [
-        { name: 'ping', tags: ['utility'] },
-        { name: 'prefix', tags: ['settings'] },
-        { name: 'menu', tags: ['utility'] },
-        { name: 'runtime', tags: ['utility'] },
-        { name: 'pair', tags: ['utility'] }
-    ];
-    
-    const folderCommands = [];
-    for (const [pattern, command] of commands.entries()) {
-        if (!builtInCommands.find(c => c.name === pattern)) {
-            folderCommands.push({
-                name: pattern,
-                tags: command.tags || command.category ? [command.category] : ['general']
-            });
+// Handle incoming messages and execute commands
+async function handleMessage(conn, message, sessionId) {
+    try {
+        if (message.key && message.key.remoteJid === 'status@broadcast') {
+            if (AUTO_STATUS_SEEN === "true") {
+                await conn.readMessages([message.key]).catch(console.error);
+            }
+            
+            if (AUTO_STATUS_REACT === "true") {
+                const botJid = conn.user.id;
+                const emojis = ['❤️', '💸', '😇', '🍂', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '🗿', '🇳🇬', '💜', '💙', '🌝', '🖤', '💚'];
+                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                await conn.sendMessage(message.key.remoteJid, {
+                    react: {
+                        text: randomEmoji,
+                        key: message.key,
+                    } 
+                }, { statusJidList: [message.key.participant, botJid] }).catch(console.error);
+                
+                const timestamp = new Date().toLocaleTimeString();
+                console.log(`[${timestamp}] ✅ Auto-liked a status with ${randomEmoji} emoji`);
+            }                       
+            
+            if (AUTO_STATUS_REPLY === "true") {
+                const user = message.key.participant;
+                const text = `${AUTO_STATUS_MSG}`;
+                await conn.sendMessage(user, { text: text, react: { text: '💜', key: message.key } }, { quoted: message }).catch(console.error);
+            }
+            
+            if (message.message && (message.message.imageMessage || message.message.videoMessage)) {
+                statusMediaStore.set(message.key.participant, {
+                    message: message,
+                    timestamp: Date.now()
+                });
+            }
+            
+            return;
         }
-    }
-    
-    const allCommands = [...builtInCommands, ...folderCommands];
-    
-    const commandsByTag = {};
-    allCommands.forEach(cmd => {
-        const tags = cmd.tags || ['general'];
-        tags.forEach(tag => {
-            if (!commandsByTag[tag]) {
-                commandsByTag[tag] = [];
-            }
-            if (!commandsByTag[tag].find(c => c.name === cmd.name)) {
-                commandsByTag[tag].push(cmd);
-            }
-        });
-    });
-    
-    let menuText = `
-╔══════════════════════════╗
-║    🚀 NEXTY MINI XMD    ║
-║     🤖 WhatsApp Bot     ║
-╚══════════════════════════╝
 
-📌 Prefix : ${userPrefix}
-👤 Owner  : NEXTYxALI
-📊 Total  : ${allCommands.length} commands
+        if (!message.message) return;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 *AVAILABLE COMMANDS*
-━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
+        const messageType = getMessageType(message);
+        let body = getMessageText(message, messageType);
 
-    const categoryOrder = ['utility', 'fun', 'group', 'sticker', 'downloader', 'search', 'music', 'convert', 'tools', 'general'];
-    const categoryEmojis = {
-        'utility': '🔧',
-        'fun': '🎉',
-        'group': '👥',
-        'sticker': '🎨',
-        'downloader': '📥',
-        'search': '🔍',
-        'music': '🎵',
-        'convert': '🔄',
-        'tools': '⚙️',
-        'general': '📌'
-    };
-    
-    for (const category of categoryOrder) {
-        if (commandsByTag[category] && commandsByTag[category].length > 0) {
-            const emoji = categoryEmojis[category] || '📌';
-            menuText += `\n${emoji} *${category.toUpperCase()}*\n`;
-            for (const cmd of commandsByTag[category]) {
-                menuText += `   ➤ ${userPrefix}${cmd.name}\n`;
-            }
+        const userPrefix = userPrefixes.get(sessionId) || PREFIX;
+        
+        if (!body.startsWith(userPrefix)) return;
+
+        const args = body.slice(userPrefix.length).trim().split(/ +/);
+        const commandName = args.shift().toLowerCase();
+
+        console.log(`🔍 Detected command: ${commandName} from user: ${sessionId}`);
+
+        if (await handleBuiltInCommands(conn, message, commandName, args, sessionId)) {
+            return;
         }
+
+        if (commands.has(commandName)) {
+            const command = commands.get(commandName);
+            
+            console.log(`🔧 Executing command: ${commandName} for session: ${sessionId}`);
+            
+            try {
+                const reply = (text, options = {}) => {
+                    return conn.sendMessage(message.key.remoteJid, { text }, { 
+                        quoted: message, 
+                        ...options 
+                    });
+                };
+                
+                let groupMetadata = null;
+                const from = message.key.remoteJid;
+                const isGroup = from.endsWith('@g.us');
+                
+                if (isGroup) {
+                    try {
+                        groupMetadata = await conn.groupMetadata(from);
+                    } catch (error) {
+                        console.error("Error fetching group metadata:", error);
+                    }
+                }
+                
+                const quotedMessage = getQuotedMessage(message);
+                
+                const m = {
+                    mentionedJid: message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
+                    quoted: quotedMessage,
+                    sender: message.key.participant || message.key.remoteJid
+                };
+                
+                const q = body.slice(userPrefix.length + commandName.length).trim();
+                
+                let isAdmins = false;
+                let isCreator = false;
+                
+                if (isGroup && groupMetadata) {
+                    const participant = groupMetadata.participants.find(p => p.id === m.sender);
+                    isAdmins = participant?.admin === 'admin' || participant?.admin === 'superadmin';
+                    isCreator = participant?.admin === 'superadmin';
+                }
+                
+                conn.ev.on('group-participants.update', async (update) => {
+                    console.log("🔥 group-participants.update fired:", update);
+                    await GroupEvents(conn, update);
+                });
+        
+                await command.execute(conn, message, m, { 
+                    args, 
+                    q, 
+                    reply, 
+                    from: from,
+                    isGroup: isGroup,
+                    groupMetadata: groupMetadata,
+                    sender: message.key.participant || message.key.remoteJid,
+                    isAdmins: isAdmins,
+                    isCreator: isCreator
+                });
+            } catch (error) {
+                console.error(`❌ Error executing command ${commandName}:`, error);
+            }
+        } else {
+            console.log(`⚠️ Command not found: ${commandName}`);
+        }
+    } catch (error) {
+        console.error("Error handling message:", error);
     }
-
-    menuText += `
-━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Usage:* ${userPrefix}command
-📢 *Channel:* @NEXTY_SUPPORT
-
-> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ NEXTYxALI 💛
-`;
-
-    return menuText;
 }
 
-// ==================== BUILT-IN COMMANDS ====================
+// Handle built-in commands
 async function handleBuiltInCommands(conn, message, commandName, args, sessionId) {
     try {
-        const userPrefix = userPrefixes.get(sessionId) || BOT_PREFIX;
+        const userPrefix = userPrefixes.get(sessionId) || PREFIX;
         const from = message.key.remoteJid;
         
-        if (from.endsWith('@newsletter') || from.endsWith('@lid')) {
+        // Handle newsletter/channel messages
+        if (from.endsWith('@newsletter')) {
             console.log("📢 Processing command in newsletter/channel");
             
             switch (commandName) {
@@ -537,28 +534,7 @@ async function handleBuiltInCommands(conn, message, commandName, args, sessionId
                     const end = Date.now();
                     const responseTime = (end - start) / 1000;
                     
-                    const details = `⚡ *NEXTY MINI XMD SPEED CHECK* ⚡
+                    // ✅ CHANGE 3: Ping details with new name
+                    const details = `⚡ *${BOT_NAME} SPEED CHECK* ⚡
                     
-⏱️ Response Time: *${responseTime.toFixed(2)}s* ⚡
-👤 Owner: *NEXTYxALI*`;
-
-                    await conn.sendMessage(from, {
-                        video: { url: PING_VIDEO_URL },
-                        caption: details,
-                        contextInfo: {
-                            forwardingScore: 999,
-                            isForwarded: true,
-                            forwardedNewsletterMessageInfo: {
-                                newsletterJid: "116505769414861@lid",
-                                newsletterName: "NEXTY SUPPORT",
-                                serverMessageId: 200
-                            }
-                        }
-                    });
-                    return true;
-                    
-                case 'menu':
-                case 'menu1':
-                    const menu = generateMenu(userPrefix, sessionId);
-                    await conn.sendMessage(from, {
-                   
+⏱️ 
