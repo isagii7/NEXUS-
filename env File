@@ -9,7 +9,7 @@ CHANNEL_JIDS=116505769414861@lid
 CHANNEL_NAME=NEXTY SUPPORT
 CHANNEL_LINK=https://whatsapp.com/channel/0029Vb8mDiBCHDytzXwk1o0K
 
-# Video URLs
+# Videos
 MENU_VIDEO_URL=https://files.catbox.moe/l71qqt.mp4
 PING_VIDEO_URL=https://files.catbox.moe/l71qqt.mp4
 WELCOME_VIDEO_URL=https://files.catbox.moe/l71qqt.mp4
@@ -19,3 +19,6 @@ AUTO_STATUS_SEEN=true
 AUTO_STATUS_REACT=true
 AUTO_STATUS_REPLY=false
 AUTO_STATUS_MSG=YOUR STATUS HAS BEEN SEEN BY NEXTY MINI XMD 🫶🏻
+
+# Database
+DATABASE_URL=./database.db
