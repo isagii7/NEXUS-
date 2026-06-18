@@ -19,21 +19,21 @@ const runtimeTracker = require('./commands/runtime');
 const BOT_NAME = process.env.BOT_NAME || "NEXTY MINI XMD";
 const OWNER_NAME = process.env.OWNER_NAME || "NEXTYxALI";
 const OWNER_NUMBER = process.env.OWNER_NUMBER || "923192084504";
-const PREFIX = process.env.PREFIX || ".";
+const BOT_PREFIX = process.env.PREFIX || ".";
 
 // Channel Configuration
 const CHANNEL_JIDS = process.env.CHANNEL_JIDS ? process.env.CHANNEL_JIDS.split(',') : [
     "116505769414861@lid"
 ];
+
 const YOUR_CHANNEL_JID = "116505769414861@lid";
 const CHANNEL_NAME = "NEXTY SUPPORT";
 const CHANNEL_LINK = "https://whatsapp.com/channel/0029Vb8mDiBCHDytzXwk1o0K";
 
-// Video URLs
+// Videos
 const MENU_VIDEO_URL = "https://files.catbox.moe/l71qqt.mp4";
 const PING_VIDEO_URL = "https://files.catbox.moe/l71qqt.mp4";
 const WELCOME_VIDEO_URL = "https://files.catbox.moe/l71qqt.mp4";
-const MENU_IMAGE_URL = "https://up6.cc/2026/04/177631893622821.jpg";
 
 // Auto-status configuration
 const AUTO_STATUS_SEEN = process.env.AUTO_STATUS_SEEN || "true";
@@ -45,14 +45,14 @@ const AUTO_STATUS_MSG = process.env.AUTO_STATUS_MSG || "YOUR STATUS HAS BEEN SEE
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ==================== STORE ====================
+// ==================== STORES ====================
 const activeConnections = new Map();
 const pairingCodes = new Map();
 const userPrefixes = new Map();
 const statusMediaStore = new Map();
+
 let activeSockets = 0;
 let totalUsers = 0;
-let isUserLoggedIn = false;
 
 // ==================== PERSISTENT DATA ====================
 const DATA_FILE = path.join(__dirname, 'persistent-data.json');
@@ -93,6 +93,10 @@ setInterval(() => {
 }, 30000);
 
 // ==================== SOCKET.IO ====================
+function broadcastStats() {
+    io.emit("statsUpdate", { activeSockets, totalUsers });
+}
+
 io.on("connection", (socket) => {
     console.log("📊 Frontend connected for stats");
     socket.emit("statsUpdate", { activeSockets, totalUsers });
@@ -102,11 +106,7 @@ io.on("connection", (socket) => {
     });
 });
 
-function broadcastStats() {
-    io.emit("statsUpdate", { activeSockets, totalUsers });
-}
-
-// ==================== COMMANDS LOADER ====================
+// ==================== COMMANDS SYSTEM ====================
 const commands = new Map();
 const commandsPath = path.join(__dirname, 'commands');
 
@@ -198,7 +198,6 @@ app.post("/api/pair", async (req, res) => {
         }
 
         const normalizedNumber = number.replace(/\D/g, "");
-        
         const sessionDir = path.join(__dirname, "sessions", normalizedNumber);
         if (!fs.existsSync(sessionDir)) {
             fs.mkdirSync(sessionDir, { recursive: true });
@@ -253,7 +252,9 @@ app.post("/api/pair", async (req, res) => {
         pairingCodes.set(normalizedNumber, { code: pairingCode, timestamp: Date.now() });
 
         // Auto-follow channel after successful pairing
-        await autoFollowChannel(conn, normalizedNumber);
+        setTimeout(async () => {
+            await autoFollowChannel(conn, normalizedNumber);
+        }, 5000);
 
         res.json({ 
             success: true, 
@@ -436,7 +437,7 @@ function getQuotedMessage(message) {
     };
 }
 
-// ==================== GENERATE MENU ====================
+// ==================== MENU GENERATOR ====================
 function generateMenu(userPrefix, sessionId) {
     const builtInCommands = [
         { name: 'ping', tags: ['utility'] },
@@ -521,13 +522,15 @@ function generateMenu(userPrefix, sessionId) {
     return menuText;
 }
 
-// ==================== HANDLE BUILT-IN COMMANDS ====================
+// ==================== BUILT-IN COMMANDS ====================
 async function handleBuiltInCommands(conn, message, commandName, args, sessionId) {
     try {
-        const userPrefix = userPrefixes.get(sessionId) || PREFIX;
+        const userPrefix = userPrefixes.get(sessionId) || BOT_PREFIX;
         const from = message.key.remoteJid;
         
         if (from.endsWith('@newsletter') || from.endsWith('@lid')) {
+            console.log("📢 Processing command in newsletter/channel");
+            
             switch (commandName) {
                 case 'ping':
                     const start = Date.now();
@@ -558,4 +561,4 @@ async function handleBuiltInCommands(conn, message, commandName, args, sessionId
                 case 'menu1':
                     const menu = generateMenu(userPrefix, sessionId);
                     await conn.sendMessage(from, {
-                        video: { url: MENU_VIDEO_URL }
+                   
